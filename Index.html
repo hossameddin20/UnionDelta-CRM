@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Union Delta CRM</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, doc, setDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// ── Firebase Config ──────────────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyC9OE-jpufbmcQk4sudrBViJ3zwbW9CGu0",
+  authDomain: "uniondelta-crm.firebaseapp.com",
+  projectId: "uniondelta-crm",
+  storageBucket: "uniondelta-crm.firebasestorage.app",
+  messagingSenderId: "596689828642",
+  appId: "1:596689828642:web:8a28fc56709ea93f88c37b"
+};
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+
+// ── Constants ────────────────────────────────────────────────────────────────
+const COUNTRIES      = ["UAE","KSA","Qatar","Kuwait","Oman","Iraq"];
+const STATUS_OPTIONS = ["Hot","Warm","Cold"];
+const ACT_TYPES      = ["Visit","Call","WhatsApp"];
+const OUTCOMES       = ["Interested","Follow-up needed","Became client","Not interested","No answer","Postponed"];
+const TEAM           = ["Hussam","Ahmad","Sara","Khalid","Unassigned"];
+const FLAGS          = {UAE:"🇦🇪",KSA:"🇸🇦",Qatar:"🇶🇦",Kuwait:"🇰🇼",Oman:"🇴🇲",Iraq:"🇮🇶"};
+const STATUS_CFG     = {
+  Hot:  {bg:"rgba(239,68,68,0.12)",  border:"#ef444440", text:"#f87171", label:"🔥 Hot" },
+  Warm: {bg:"rgba(245,158,11,0.12)", border:"#f59e0b40", text:"#fbbf24", label:"🌤 Warm"},
+  Cold: {bg:"rgba(56,189,248,0.12)", border:"#38bdf840", text:"#38bdf8", label:"❄️ Cold"},
+};
+const CITY_COORDS = {
+  "Dubai":{lat:25.2048,lng:55.2708},"Abu Dhabi":{lat:24.4539,lng:54.3773},
+  "Sharjah":{lat:25.3463,lng:55.4209},"Ajman":{lat:25.4052,lng:55.5136},
+  "RAK":{lat:25.7895,lng:55.9432},"Fujairah":{lat:25.1288,lng:56.3265},
+  "Riyadh":{lat:24.7136,lng:46.6753},"Jeddah":{lat:21.4858,lng:39.1925},
+  "Doha":{lat:25.2854,lng:51.5310},"Kuwait City":{lat:29.3759,lng:47.9774},
+  "Muscat":{lat:23.5880,lng:58.3829},"Baghdad":{lat:33.3152,lng:44.3661},
+  "Sulaymaniyah":{lat:35.5557,lng:45.4351}
+};
+const SEED = [
+  {id:"b1",name:"PPS Dubai",contact:"Wayne",phone:"+97143884318",country:"UAE",city:"Dubai",area:"Umm Suqeim Rd",status:"Cold",nextAction:"",notes:"XPEL PPF, tinting, ceramic coating, wrapping.",website:"ppsdxb.com",assignedTo:"Hussam",activities:[],createdAt:today()},
+  {id:"b2",name:"Smart Auto UAE",contact:"Anoob",phone:"+971567269666",country:"UAE",city:"Dubai",area:"Al Quoz / MotorCity",status:"Cold",nextAction:"",notes:"4 branches. 50,000+ clients. 3M, TotalGard installer.",website:"smartautouae.com",assignedTo:"Hussam",activities:[],createdAt:today()},
+  {id:"b3",name:"Apex Detail Studio",contact:"",phone:"",country:"UAE",city:"Dubai",area:"Dubai",status:"Cold",nextAction:"",notes:"XPEL certified. PPF, ceramic coating, window tinting.",website:"apexdetailstudio.com",assignedTo:"Unassigned",activities:[],createdAt:today()},
+  {id:"b4",name:"Elite Crystal Car Care",contact:"",phone:"+971565504076",country:"UAE",city:"Dubai",area:"Ras Al Khor",status:"Cold",nextAction:"",notes:"PPF, ceramic coating, interior detailing, polishing.",website:"elitecrystal.ae",assignedTo:"Hussam",activities:[],createdAt:today()},
+  {id:"b5",name:"RMA PPF Dubai",contact:"",phone:"",country:"UAE",city:"Dubai",area:"Al Quoz Industrial 2",status:"Cold",nextAction:"",notes:"PPF, ceramic coating, window films. Free collection.",website:"rmappf.ae",assignedTo:"Hussam",activities:[],createdAt:today()},
+  {id:"b6",name:"Desert Diamond Car Care",contact:"Pavel",phone:"",country:"UAE",city:"Abu Dhabi",area:"Abu Dhabi",status:"Cold",nextAction:"",notes:"PPF, window tinting, ceramic coating.",website:"car-care.center",assignedTo:"Ahmad",activities:[],createdAt:today()},
+  {id:"b7",name:"Car X Auto Care",contact:"",phone:"",country:"UAE",city:"Abu Dhabi",area:"Mussafah",status:"Cold",nextAction:"",notes:"Authorized ARMOLAN window films & PPF installer.",website:"carxautouae.com",assignedTo:"Ahmad",activities:[],createdAt:today()},
+  {id:"b8",name:"TintX Auto",contact:"",phone:"",country:"UAE",city:"Abu Dhabi",area:"Abu Dhabi",status:"Cold",nextAction:"",notes:"20+ years. PPF, tinting, ceramic coating, wrapping.",website:"tintxauto.com",assignedTo:"Ahmad",activities:[],createdAt:today()},
+  {id:"b9",name:"TotalGard Sharjah",contact:"",phone:"",country:"UAE",city:"Sharjah",area:"Sharjah",status:"Cold",nextAction:"",notes:"Ceramic tint, PPF, nano ceramic coating, car wrapping.",website:"totalgard.ae",assignedTo:"Hussam",activities:[],createdAt:today()},
+  {id:"b10",name:"Extra Cool Fujairah",contact:"",phone:"+97192228687",country:"UAE",city:"Fujairah",area:"New Sakamkam",status:"Cold",nextAction:"",notes:"Tint, PPF, ceramic coating. Opp Century Mall.",website:"",assignedTo:"Unassigned",activities:[],createdAt:today()},
+  {id:"b11",name:"Strong Shield",contact:"",phone:"",country:"KSA",city:"Riyadh",area:"Riyadh",status:"Cold",nextAction:"",notes:"PPF, nano ceramics, window film, detailing.",website:"strongshield.sa",assignedTo:"Hussam",activities:[],createdAt:today()},
+  {id:"b12",name:"Protect You KSA",contact:"",phone:"",country:"KSA",city:"Riyadh",area:"Riyadh",status:"Cold",nextAction:"",notes:"PPF, window tinting, heat insulation, nano ceramic.",website:"protectyouksa.com",assignedTo:"Hussam",activities:[],createdAt:today()},
+  {id:"b13",name:"Nawader El Forsan",contact:"",phone:"",country:"KSA",city:"Riyadh",area:"Riyadh",status:"Cold",nextAction:"",notes:"3M certified. PPF, tinting, nano ceramic coating.",website:"nforsan.com",assignedTo:"Hussam",activities:[],createdAt:today()},
+  {id:"b14",name:"Detail Masters Jeddah",contact:"",phone:"",country:"KSA",city:"Jeddah",area:"Jeddah",status:"Cold",nextAction:"",notes:"Luxury automotive care. PPF, nano ceramic, tinting.",website:"detailmasters.sa",assignedTo:"Hussam",activities:[],createdAt:today()},
+  {id:"b15",name:"Topaz Detailing Doha",contact:"",phone:"+97444065506",country:"Qatar",city:"Doha",area:"West Bay",status:"Cold",nextAction:"",notes:"20+ technicians. PPF bays, detailing, tinting.",website:"topazdetailing.com",assignedTo:"Hussam",activities:[],createdAt:today()},
+  {id:"b16",name:"Shield Tint Qatar",contact:"",phone:"+97466233645",country:"Qatar",city:"Doha",area:"Lusail / Pearl Qatar",status:"Cold",nextAction:"",notes:"Window tinting, PPF. Serves Doha, Lusail, Pearl.",website:"shieldtintqatar.com",assignedTo:"Hussam",activities:[],createdAt:today()},
+  {id:"b17",name:"Al Wessam Car Care",contact:"",phone:"",country:"Qatar",city:"Doha",area:"Doha",status:"Cold",nextAction:"",notes:"20+ years. XPEL PPF, AutoGlym detailing, tinting.",website:"alwessamcarcare.com",assignedTo:"Unassigned",activities:[],createdAt:today()},
+  {id:"b18",name:"Empire Studio Kuwait",contact:"",phone:"",country:"Kuwait",city:"Kuwait City",area:"Kuwait City",status:"Cold",nextAction:"",notes:"6+ years. Best PPF in Kuwait. Nanotech coatings.",website:"empirestudiokw.com",assignedTo:"Hussam",activities:[],createdAt:today()},
+  {id:"b19",name:"Resan Kuwait",contact:"",phone:"",country:"Kuwait",city:"Kuwait City",area:"Kuwait City",status:"Cold",nextAction:"",notes:"PPF, matte protection, heat insulation, tinting.",website:"resankwt.com",assignedTo:"Hussam",activities:[],createdAt:today()},
+  {id:"b20",name:"5S Pro Oman",contact:"",phone:"+96897708949",country:"Oman",city:"Muscat",area:"Al Omran St, Ghala",status:"Cold",nextAction:"",notes:"Largest detailing centre in Oman. PPF, ceramic, tinting.",website:"5sservicesoman.com",assignedTo:"Hussam",activities:[],createdAt:today()},
+  {id:"b21",name:"Al Khalili Auto Services",contact:"Mohammed",phone:"+96822010001",country:"Oman",city:"Muscat",area:"Ghubra / Seeb",status:"Cold",nextAction:"",notes:"Est. 2012. 2,000+ cars treated. PPF specialists.",website:"alkhalili.com",assignedTo:"Hussam",activities:[],createdAt:today()},
+  {id:"b22",name:"Auto Resort Muscat",contact:"",phone:"",country:"Oman",city:"Muscat",area:"Al Azaiba",status:"Cold",nextAction:"",notes:"PPF, ceramic coating, window tinting, paint correction.",website:"autoresort.om",assignedTo:"Hussam",activities:[],createdAt:today()},
+  {id:"b23",name:"Alnahtha Auto Baghdad",contact:"",phone:"+9647700504447",country:"Iraq",city:"Baghdad",area:"Alresafa",status:"Cold",nextAction:"",notes:"XPEL certified. PPF & window tint.",website:"",assignedTo:"Hussam",activities:[],createdAt:today()},
+];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function today(){ return new Date().toISOString().slice(0,10); }
+function genId(){ return "b"+Date.now()+Math.random().toString(36).slice(2,6); }
+function fmt(s){ if(!s)return"—"; try{ return new Date(s+"T00:00:00").toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"}); }catch{return s;} }
+function isWeekday(){ const d=new Date().getDay(); return d>=1&&d<=5; }
+function haversine(a,b){ const R=6371,dLat=(b.lat-a.lat)*Math.PI/180,dLng=(b.lng-a.lng)*Math.PI/180,x=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)**2; return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x)); }
+
+// ── Firebase CRUD ─────────────────────────────────────────────────────────────
+async function fbGetAll(){ const s=await getDocs(collection(db,"businesses")); return s.docs.map(d=>d.data()); }
+async function fbSet(b){ await setDoc(doc(db,"businesses",b.id),b); }
+async function fbDel(id){ await deleteDoc(doc(db,"businesses",id)); }
+async function fbUpdate(id,data){ await updateDoc(doc(db,"businesses",id),data); }
+async function fbGetSchedules(){ try{ const s=await getDocs(collection(db,"schedules")); return s.docs.map(d=>d.data()); }catch{return[];} }
+async function fbSetSchedule(s){ await setDoc(doc(db,"schedules",s.id),s); }
+
+// ── Claude AI ─────────────────────────────────────────────────────────────────
+async function callClaude(prompt, system="You are a helpful assistant."){
+  const res = await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      model:"claude-sonnet-4-6",
+      max_tokens:1500,
+      system,
+      messages:[{role:"user",content:prompt}]
+    })
+  });
+  const d = await res.json();
+  return d.content?.map(c=>c.text||"").join("") || "";
+}
+
+async function callClaudeWithSearch(prompt){
+  const res = await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      model:"claude-sonnet-4-6",
+      max_tokens:2000,
+      tools:[{type:"web_search_20250305",name:"web_search"}],
+      messages:[{role:"user",content:prompt}]
+    })
+  });
+  const d = await res.json();
+  return d.content?.map(c=>c.text||"").join("") || "";
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let state = {
+  centers:[],schedules:[],page:"list",selectedId:null,
+  filterStatus:"All",filterCountry:"All",filterAssigned:"All",
+  search:"",sortBy:"country",
+  showAdd:false,showAddAct:false,editing:null,
+  newCenter:{name:"",contact:"",phone:"",country:"UAE",city:"",area:"",status:"Warm",nextAction:"",notes:"",website:"",assignedTo:"Hussam"},
+  newAct:{type:"Call",date:today(),note:"",by:"Hussam",outcome:"",duration:"30"},
+  schedCity:"Dubai",schedDate:today(),schedList:[],
+  aiSchedule:null,aiLoading:false,aiMessage:"",
+  finderQuery:"",finderResults:[],finderLoading:false,
+  weekTarget:30,toast:null,loading:true,
+  chatMessages:[],chatInput:"",chatLoading:false,
+};
+
+function setState(patch){ state={...state,...patch}; render(); }
+function notify(msg){ setState({toast:msg}); setTimeout(()=>setState({toast:null}),2500); }
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+async function boot(){
+  try {
+    let data = await fbGetAll();
+    if(data.length===0){
+      for(const b of SEED){ await fbSet(b); }
+      data = SEED;
+    }
+    const schedules = await fbGetSchedules();
+    setState({centers:data,schedules,loading:false});
+    if(isWeekday()) checkAutoSchedule(data);
+  } catch(e){
+    console.error(e);
+    setState({centers:SEED,loading:false});
+    notify("⚠ Firebase offline — using local data");
+  }
+}
+
+// ── Auto Schedule (Mon-Fri check) ─────────────────────────────────────────────
+async function checkAutoSchedule(centers){
+  const key="ud_last_schedule_"+today();
+  if(localStorage.getItem(key)) return;
+  localStorage.setItem(key,"1");
+  setTimeout(()=>generateAISchedule(centers), 500);
+}
+
+async function generateAISchedule(centers){
+  setState({aiLoading:true, aiMessage:"🤖 AI Agent is building today's schedule…"});
+  const summary = centers.map(c=>`${c.name}|${c.city}|${c.status}|${c.assignedTo}|nextAction:${c.nextAction||"none"}|activities:${c.activities.length}`).join("\n");
+  const prompt = `You are a sales route optimizer for Union Delta, a PPF (paint protection film) distributor in the GCC region.
+
+Today is ${today()} (${new Date().toLocaleDateString("en-GB",{weekday:"long"})}).
+
+Here is the full list of detailing centers in the database:
+${summary}
+
+Your task:
+1. Select the BEST 6-8 businesses to visit TODAY based on:
+   - Hot leads first, then Warm, then Cold with no recent activity
+   - Overdue follow-ups (nextAction date passed)
+   - Group by city to minimize travel time
+   - Spread across different assignees if possible
+2. For each stop suggest a time slot starting 9:30am, ~1hr per visit
+3. Give a brief reason why each was selected
+4. Give one overall sales tip for today
+
+Respond ONLY in this exact JSON format:
+{
+  "stops": [
+    {"businessName":"...","city":"...","time":"09:30","reason":"...","priority":"High/Medium/Low"}
+  ],
+  "salesTip": "..."
+}`;
+
+  try {
+    const raw = await callClaude(prompt,"You are a sales AI agent. Always respond with valid JSON only, no markdown.");
+    const clean = raw.replace(/```json|```/g,"").trim();
+    const parsed = JSON.parse(clean);
+    setState({aiSchedule:parsed, aiLoading:false, aiMessage:"", page:"schedule"});
+    notify("✅ AI schedule ready for today!");
+  } catch(e) {
+    setState({aiLoading:false, aiMessage:""});
+    notify("⚠ AI schedule generation failed");
+  }
+}
+
+// ── Business Finder ───────────────────────────────────────────────────────────
+async function runFinder(){
+  const q = state.finderQuery.trim();
+  if(!q) return;
+  setState({finderLoading:true, finderResults:[]});
+  const prompt = `Search for PPF (paint protection film), window tinting, and auto detailing businesses in: "${q}"
+
+Use web search to find real businesses. For each business found, extract:
+- Business name
+- City and country
+- Phone number (if available)
+- Website (if available)
+- Services offered (PPF/tint/ceramic etc)
+- Any contact person name
+
+Return ONLY valid JSON array, no markdown:
+[
+  {"name":"...","city":"...","country":"...","phone":"...","website":"...","notes":"...","contact":"..."}
+]
+
+Find at least 5-10 real businesses if possible.`;
+
+  try {
+    const raw = await callClaudeWithSearch(prompt);
+    const match = raw.match(/\[[\s\S]*\]/);
+    if(!match) throw new Error("No JSON array found");
+    const results = JSON.parse(match[0]);
+    setState({finderResults:results, finderLoading:false});
+  } catch(e) {
+    setState({finderLoading:false});
+    notify("⚠ Search failed. Try a more specific query.");
+  }
+}
+
+async function addFoundBusiness(b){
+  const newB = {
+    id:genId(), name:b.name||"", contact:b.contact||"", phone:b.phone||"",
+    country:b.country||"UAE", city:b.city||"", area:"", status:"Cold",
+    nextAction:"", notes:b.notes||b.services||"", website:b.website||"",
+    assignedTo:"Hussam", activities:[], createdAt:today()
+  };
+  await fbSet(newB);
+  setState({centers:[...state.centers, newB]});
+  notify(`✅ "${newB.name}" added to CRM`);
+}
+
+// ── AI Chat Agent ─────────────────────────────────────────────────────────────
+async function sendChat(){
+  const msg = state.chatInput.trim();
+  if(!msg||state.chatLoading) return;
+  const userMsg = {role:"user",content:msg};
+  setState({chatMessages:[...state.chatMessages,userMsg], chatInput:"", chatLoading:true});
+  
+  const context = `You are an AI sales agent for Union Delta, a PPF (paint protection film) brand distributor in the GCC & Iraq region (UAE, KSA, Qatar, Kuwait, Oman, Iraq).
+
+Current CRM data summary:
+- Total businesses: ${state.centers.length}
+- Hot leads: ${state.centers.filter(c=>c.status==="Hot").length}
+- Warm leads: ${state.centers.filter(c=>c.status==="Warm").length}  
+- Cold leads: ${state.centers.filter(c=>c.status==="Cold").length}
+- Overdue follow-ups: ${state.centers.filter(c=>c.nextAction&&c.nextAction<today()).length}
+- By country: ${COUNTRIES.map(co=>`${co}:${state.centers.filter(c=>c.country===co).length}`).join(", ")}
+
+Recent hot leads: ${state.centers.filter(c=>c.status==="Hot").slice(0,3).map(c=>c.name+" ("+c.city+")").join(", ")||"none"}
+
+Help the user with sales advice, schedule planning, follow-up strategies, and CRM management. Be concise and actionable.`;
+
+  try {
+    const reply = await callClaude(msg, context);
+    setState({chatMessages:[...state.chatMessages,userMsg,{role:"assistant",content:reply}], chatLoading:false});
+  } catch(e) {
+    setState({chatMessages:[...state.chatMessages,userMsg,{role:"assistant",content:"⚠ Could not connect to AI. Please try again."}], chatLoading:false});
+  }
+}
+
+// ── Schedule Builder ──────────────────────────────────────────────────────────
+function buildManualSchedule(){
+  const coord = CITY_COORDS[state.schedCity];
+  if(!coord){ notify("⚠ City not found"); return; }
+  const cityCenters = state.centers.filter(c=>c.city===state.schedCity);
+  if(cityCenters.length===0){ notify("⚠ No businesses in this city"); return; }
+  const remaining=[...cityCenters]; const route=[]; let cur=coord;
+  while(route.length<8&&remaining.length>0){
+    let best=0,bestDist=Infinity;
+    remaining.forEach((c,i)=>{ const cc=CITY_COORDS[c.city]||coord; const d=haversine(cur,cc); if(d<bestDist){bestDist=d;best=i;} });
+    route.push({...remaining[best],scheduledTime:`${(9+route.length).toString().padStart(2,"0")}:30`,done:false,outcome:""});
+    cur=CITY_COORDS[remaining[best].city]||coord;
+    remaining.splice(best,1);
+  }
+  setState({schedList:route});
+}
+
+async function saveSchedule(){
+  if(state.schedList.length===0) return;
+  const s={id:"sc"+Date.now(),date:state.schedDate,city:state.schedCity,stops:state.schedList,createdAt:today(),assignedTo:"Hussam"};
+  await fbSetSchedule(s);
+  setState({schedules:[s,...state.schedules],schedList:[]});
+  notify("✅ Schedule saved to cloud!");
+}
+
+// ── Business CRUD ─────────────────────────────────────────────────────────────
+async function handleAdd(){
+  const c=state.newCenter; if(!c.name.trim())return;
+  const nb={...c,id:genId(),activities:[],createdAt:today()};
+  await fbSet(nb);
+  setState({centers:[...state.centers,nb],newCenter:{name:"",contact:"",phone:"",country:"UAE",city:"",area:"",status:"Warm",nextAction:"",notes:"",website:"",assignedTo:"Hussam"},showAdd:false});
+  notify("✅ Business added");
+}
+async function handleSaveEdit(){
+  const e=state.editing; if(!e)return;
+  await fbUpdate(state.selectedId,e);
+  setState({centers:state.centers.map(c=>c.id===state.selectedId?{...c,...e}:c),editing:null});
+  notify("✅ Saved");
+}
+async function handleAddAct(){
+  const a=state.newAct; if(!a.note.trim())return;
+  const act={...a,id:"a"+Date.now()};
+  const c=state.centers.find(x=>x.id===state.selectedId);
+  const acts=[act,...(c.activities||[])];
+  await fbUpdate(state.selectedId,{activities:acts});
+  setState({centers:state.centers.map(x=>x.id===state.selectedId?{...x,activities:acts}:x),newAct:{type:"Call",date:today(),note:"",by:"Hussam",outcome:"",duration:"30"},showAddAct:false});
+  notify("✅ Activity logged");
+}
+async function handleDelAct(actId){
+  const c=state.centers.find(x=>x.id===state.selectedId);
+  const acts=c.activities.filter(a=>a.id!==actId);
+  await fbUpdate(state.selectedId,{activities:acts});
+  setState({centers:state.centers.map(x=>x.id===state.selectedId?{...x,activities:acts}:x)});
+}
+async function handleStatus(id,status){
+  await fbUpdate(id,{status});
+  setState({centers:state.centers.map(c=>c.id===id?{...c,status}:c)});
+}
+async function handleNextAction(id,date){
+  await fbUpdate(id,{nextAction:date});
+  setState({centers:state.centers.map(c=>c.id===id?{...c,nextAction:date}:c)});
+}
+async function handleDelete(id){
+  if(!confirm("Delete this business?"))return;
+  await fbDel(id);
+  setState({centers:state.centers.filter(c=>c.id!==id),selectedId:null,page:"list"});
+  notify("🗑 Deleted");
+}
+function openWA(phone,name){ window.open(`https://wa.me/${phone.replace(/[\s-]/g,"")}?text=${encodeURIComponent(`Hi ${name}, this is Hussam from Union Delta. I'd like to discuss our PPF solutions with you.`)}`, "_blank"); }
+
+// ── Filtered List ─────────────────────────────────────────────────────────────
+function getFiltered(){
+  return state.centers.filter(c=>{
+    if(state.filterStatus!=="All"&&c.status!==state.filterStatus)return false;
+    if(state.filterCountry!=="All"&&c.country!==state.filterCountry)return false;
+    if(state.filterAssigned!=="All"&&c.assignedTo!==state.filterAssigned)return false;
+    const q=state.search.toLowerCase();
+    if(q&&!c.name.toLowerCase().includes(q)&&!c.contact.toLowerCase().includes(q)&&!c.city.toLowerCase().includes(q))return false;
+    return true;
+  }).sort((a,b)=>{
+    if(state.sortBy==="country")return COUNTRIES.indexOf(a.country)-COUNTRIES.indexOf(b.country)||a.name.localeCompare(b.name);
+    if(state.sortBy==="name")return a.name.localeCompare(b.name);
+    if(state.sortBy==="status")return STATUS_OPTIONS.indexOf(a.status)-STATUS_OPTIONS.indexOf(b.status);
+    if(state.sortBy==="nextAction"){if(!a.nextAction)return 1;if(!b.nextAction)return -1;return a.nextAction.localeCompare(b.nextAction);}
+    return 0;
+  });
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render(){
+  document.getElementById("root").innerHTML = buildHTML();
+  attachEvents();
+}
+
+function buildHTML(){
+  if(state.loading) return `
+    <div style="min-height:100vh;background:#0b0f1a;display:flex;align-items:center;justify-content:center;">
+      <div style="text-align:center">
+        <div style="font-size:3rem;margin-bottom:1rem">🛡️</div>
+        <p style="color:#f59e0b;font-weight:700;font-size:1.1rem">Union Delta CRM</p>
+        <p style="color:#475569;font-size:.85rem;margin-top:.5rem">Connecting to Firebase…</p>
+      </div>
+    </div>`;
+
+  const pages = {list:buildList,detail:buildDetail,schedule:buildSchedule,report:buildReport,finder:buildFinder,chat:buildChat};
+  const content = (pages[state.page]||buildList)();
+  return `
+    <div style="min-height:100vh;background:#0b0f1a;color:#f1f5f9;font-family:'Inter',system-ui,sans-serif;">
+      ${buildNav()}
+      ${content}
+      ${state.toast?`<div style="position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:#334155;color:white;padding:.75rem 1.25rem;border-radius:1rem;font-size:.85rem;z-index:99;box-shadow:0 4px 20px rgba(0,0,0,.4)">${state.toast}</div>`:""}
+      ${state.aiLoading?`<div style="position:fixed;bottom:1.5rem;right:1rem;background:#1e293b;border:1px solid #f59e0b44;color:#fbbf24;padding:.75rem 1rem;border-radius:1rem;font-size:.8rem;max-width:280px;z-index:98">🤖 ${state.aiMessage}</div>`:""}
+    </div>`;
+}
+
+function buildNav(){
+  const tabs=[["list","🏢","Centers"],["schedule","🗺","Schedule"],["finder","🔍","Finder"],["chat","🤖","AI Agent"],["report","📊","Report"]];
+  return `<div style="background:#0f172a;border-bottom:1px solid #1e293b;padding:.75rem 1rem;position:sticky;top:0;z-index:10">
+    <div style="max-width:700px;margin:0 auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem">
+        <div><p style="font-size:.7rem;color:#f59e0b;font-weight:700;letter-spacing:.1em;text-transform:uppercase">Union Delta</p>
+        <p style="font-size:1rem;font-weight:700;color:white">GCC PPF CRM <span style="font-size:.65rem;color:#10b981;margin-left:.5rem">● Live</span></p></div>
+        <div style="font-size:.7rem;color:#475569">${new Date().toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"})}</div>
+      </div>
+      <div style="display:flex;gap:.35rem">
+        ${tabs.map(([p,icon,label])=>`<button onclick="setPage('${p}')" style="flex:1;padding:.4rem .2rem;border-radius:.75rem;font-size:.7rem;font-weight:600;border:none;cursor:pointer;transition:all .2s;background:${state.page===p?"#f59e0b":"#1e293b"};color:${state.page===p?"#0f172a":"#64748b"}">${icon} ${label}</button>`).join("")}
+      </div>
+    </div>
+  </div>`;
+}
+
+function card(content, extra=""){
+  return `<div style="background:#0f172a;border-radius:1rem;padding:1.25rem;border:1px solid #1e293b;margin-bottom:.75rem ${extra}">${content}</div>`;
+}
+function sectionTitle(t){ return `<p style="font-size:.65rem;color:#475569;text-transform:uppercase;letter-spacing:.1em;margin-bottom:.75rem">${t}</p>`; }
+function badge(status){ const c=STATUS_CFG[status]||STATUS_CFG.Cold; return `<span style="background:${c.bg};color:${c.text};border:1px solid ${c.border};padding:.2rem .6rem;border-radius:2rem;font-size:.7rem;font-weight:600">${c.label}</span>`; }
+function inp(id,val,placeholder,type="text"){ return `<input id="${id}" type="${type}" value="${(val||"").replace(/"/g,"&quot;")}" placeholder="${placeholder}" style="width:100%;background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius:.75rem;padding:.5rem .75rem;font-size:.8rem;box-sizing:border-box;outline:none" oninput="handleInp(this)"/>`; }
+function sel(id,val,opts){ return `<select id="${id}" style="width:100%;background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius:.75rem;padding:.5rem .75rem;font-size:.8rem;outline:none" onchange="handleInp(this)">${opts.map(o=>`<option value="${o}" ${val===o?"selected":""}>${o}</option>`).join("")}</select>`; }
+function btn(label,onclick,style=""){ return `<button onclick="${onclick}" style="padding:.6rem 1.25rem;border-radius:.75rem;border:none;cursor:pointer;font-weight:700;font-size:.8rem;${style}">${label}</button>`; }
+
+// ── List Page ─────────────────────────────────────────────────────────────────
+function buildList(){
+  const filtered=getFiltered();
+  const todayStr=today();
+  const byCountry=COUNTRIES.map(co=>({name:co,flag:FLAGS[co],count:state.centers.filter(c=>c.country===co).length,hot:state.centers.filter(c=>c.country===co&&c.status==="Hot").length}));
+  const hot=state.centers.filter(c=>c.status==="Hot").length;
+  const due=state.centers.filter(c=>c.nextAction===todayStr).length;
+  const over=state.centers.filter(c=>c.nextAction&&c.nextAction<todayStr).length;
+  const todayV=state.centers.flatMap(c=>c.activities).filter(a=>a.date===todayStr&&a.type==="Visit").length;
+
+  return `<div style="max-width:700px;margin:0 auto;padding:1rem">
+    <!-- KPI Strip -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;margin-bottom:.75rem">
+      ${[["Total",state.centers.length,"#fff"],["🔥 Hot",hot,"#f87171"],["📅 Today",due,"#fbbf24"],["🏪 Visits",todayV,"#a78bfa"]].map(([l,v,c])=>`
+        <div style="background:#0f172a;border:1px solid #1e293b;border-radius:.75rem;padding:.75rem;text-align:center">
+          <p style="font-size:1.3rem;font-weight:700;color:${c}">${v}</p>
+          <p style="font-size:.65rem;color:#475569;margin-top:.15rem">${l}</p>
+        </div>`).join("")}
+    </div>
+    <!-- Country tiles -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;margin-bottom:.75rem">
+      ${byCountry.map(c=>`
+        <button onclick="setFilter('country','${c.name}')" style="background:${state.filterCountry===c.name?"rgba(245,158,11,.12)":"#0f172a"};border:1px solid ${state.filterCountry===c.name?"#f59e0b66":"#1e293b"};border-radius:.75rem;padding:.6rem;text-align:center;cursor:pointer;transition:all .2s">
+          <p style="font-size:1.2rem">${c.flag}</p>
+          <p style="font-size:1rem;font-weight:700;color:white">${c.count}</p>
+          <p style="font-size:.6rem;color:#475569">${c.name}</p>
+          ${c.hot>0?`<p style="font-size:.6rem;color:#f87171;font-weight:600">🔥${c.hot}</p>`:""}
+        </button>`).join("")}
+    </div>
+    <!-- Add btn -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem">
+      <p style="font-size:.65rem;color:#475569;text-transform:uppercase;letter-spacing:.08em">${filtered.length} of ${state.centers.length} businesses</p>
+      <button onclick="setState({showAdd:!state.showAdd})" style="background:#f59e0b;color:#0f172a;border:none;border-radius:2rem;padding:.5rem 1rem;font-weight:700;font-size:.8rem;cursor:pointer">+ Add</button>
+    </div>
+    <!-- Add Form -->
+    ${state.showAdd?`
+      <div style="background:#0f172a;border:1px solid #f59e0b44;border-radius:1rem;padding:1.25rem;margin-bottom:.75rem">
+        ${sectionTitle("New Business")}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+          <div style="grid-column:1/-1"><label style="font-size:.65rem;color:#64748b">Name *</label>${inp("nc_name",state.newCenter.name,"Business name")}</div>
+          <div><label style="font-size:.65rem;color:#64748b">Contact</label>${inp("nc_contact",state.newCenter.contact,"Owner/Manager")}</div>
+          <div><label style="font-size:.65rem;color:#64748b">Phone</label>${inp("nc_phone",state.newCenter.phone,"+971...")}</div>
+          <div><label style="font-size:.65rem;color:#64748b">Country</label>${sel("nc_country",state.newCenter.country,COUNTRIES)}</div>
+          <div><label style="font-size:.65rem;color:#64748b">City</label>${inp("nc_city",state.newCenter.city,"City")}</div>
+          <div><label style="font-size:.65rem;color:#64748b">Area</label>${inp("nc_area",state.newCenter.area,"District/Area")}</div>
+          <div><label style="font-size:.65rem;color:#64748b">Status</label>${sel("nc_status",state.newCenter.status,STATUS_OPTIONS)}</div>
+          <div><label style="font-size:.65rem;color:#64748b">Assign to</label>${sel("nc_assigned",state.newCenter.assignedTo,TEAM)}</div>
+          <div><label style="font-size:.65rem;color:#64748b">Follow-up</label>${inp("nc_next",state.newCenter.nextAction,"","date")}</div>
+          <div style="grid-column:1/-1"><label style="font-size:.65rem;color:#64748b">Notes</label><textarea id="nc_notes" placeholder="Services, notes…" style="width:100%;background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius:.75rem;padding:.5rem .75rem;font-size:.8rem;box-sizing:border-box;outline:none;resize:none;height:4rem" oninput="handleInp(this)">${state.newCenter.notes||""}</textarea></div>
+        </div>
+        <div style="display:flex;gap:.5rem;margin-top:.75rem">
+          ${btn("Save Business","handleAdd()","background:#f59e0b;color:#0f172a")}
+          ${btn("Cancel","setState({showAdd:false})","background:#1e293b;color:#94a3b8")}
+        </div>
+      </div>`:""}
+    <!-- Filters -->
+    <div style="background:#0f172a;border:1px solid #1e293b;border-radius:1rem;padding:1rem;margin-bottom:.75rem">
+      <input id="search_inp" value="${state.search}" placeholder="🔍  Search businesses, cities…" style="width:100%;background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius:.75rem;padding:.6rem .75rem;font-size:.8rem;box-sizing:border-box;outline:none;margin-bottom:.6rem" oninput="setState({search:this.value})"/>
+      <div style="display:flex;gap:.35rem;flex-wrap:wrap;margin-bottom:.5rem">
+        ${["All",...STATUS_OPTIONS].map(s=>`<button onclick="setFilter('status','${s}')" style="padding:.3rem .7rem;border-radius:2rem;border:none;cursor:pointer;font-size:.7rem;font-weight:600;background:${state.filterStatus===s?"#f59e0b":"#1e293b"};color:${state.filterStatus===s?"#0f172a":"#64748b"}">${s==="All"?"All Status":STATUS_CFG[s].label}</button>`).join("")}
+        <select onchange="setFilter('assigned',this.value)" style="margin-left:auto;background:#1e293b;border:1px solid #334155;color:#64748b;border-radius:2rem;padding:.3rem .7rem;font-size:.7rem;outline:none">
+          <option value="All" ${state.filterAssigned==="All"?"selected":""}>All Team</option>
+          ${TEAM.map(m=>`<option value="${m}" ${state.filterAssigned===m?"selected":""}>${m}</option>`).join("")}
+        </select>
+      </div>
+      <div style="display:flex;gap:.35rem;align-items:center">
+        <span style="font-size:.65rem;color:#334155">Sort:</span>
+        ${[["country","Country"],["status","Status"],["name","Name"],["nextAction","Follow-up"]].map(([v,l])=>`<button onclick="setState({sortBy:'${v}'})" style="padding:.2rem .5rem;border-radius:.4rem;border:none;cursor:pointer;font-size:.65rem;background:${state.sortBy===v?"rgba(245,158,11,.15)":"transparent"};color:${state.sortBy===v?"#fbbf24":"#475569"}">${l}</button>`).join("")}
+      </div>
+    </div>
+    <!-- Cards -->
+    <div>
+      ${filtered.length===0?`<div style="text-align:center;padding:3rem"><p style="font-size:2rem">🔍</p><p style="color:#475569;font-size:.85rem;margin-top:.5rem">No businesses match.</p></div>`:""}
+      ${filtered.map(c=>{
+        const isOver=c.nextAction&&c.nextAction<todayStr;
+        const isDue=c.nextAction===todayStr;
+        const acts=c.activities||[];
+        const vCount=acts.filter(a=>a.type==="Visit").length;
+        const cCount=acts.filter(a=>a.type==="Call").length;
+        const wCount=acts.filter(a=>a.type==="WhatsApp").length;
+        return `<div onclick="setPage('detail','${c.id}')" style="background:#0f172a;border:1px solid #1e293b;border-radius:1rem;padding:1rem;margin-bottom:.5rem;cursor:pointer;transition:all .2s" onmouseover="this.style.borderColor='#334155'" onmouseout="this.style.borderColor='#1e293b'">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem">
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:.4rem;flex-wrap:wrap">
+                <span>${FLAGS[c.country]||""}</span>
+                <span style="font-weight:700;color:white;font-size:.9rem">${c.name}</span>
+                ${badge(c.status)}
+              </div>
+              <p style="font-size:.7rem;color:#475569;margin-top:.2rem">${c.city}${c.area?", "+c.area:""} · <span style="color:#f59e0b88">${c.assignedTo||""}</span></p>
+            </div>
+            <span style="color:#334155;font-size:1.1rem">›</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:.4rem;margin-top:.6rem;flex-wrap:wrap">
+            ${vCount>0?`<span style="background:rgba(167,139,250,.1);color:#a78bfa;padding:.15rem .5rem;border-radius:2rem;font-size:.65rem;font-weight:600">🏪 ${vCount}</span>`:""}
+            ${cCount>0?`<span style="background:rgba(52,211,153,.1);color:#34d399;padding:.15rem .5rem;border-radius:2rem;font-size:.65rem;font-weight:600">📞 ${cCount}</span>`:""}
+            ${wCount>0?`<span style="background:rgba(74,222,128,.1);color:#4ade80;padding:.15rem .5rem;border-radius:2rem;font-size:.65rem;font-weight:600">💬 ${wCount}</span>`:""}
+            ${acts.length===0?`<span style="font-size:.65rem;color:#334155">No activity yet</span>`:""}
+            ${c.nextAction?`<span style="margin-left:auto;padding:.25rem .6rem;border-radius:2rem;font-size:.65rem;font-weight:600;background:${isOver?"rgba(239,68,68,.12)":isDue?"rgba(245,158,11,.12)":"#1e293b"};color:${isOver?"#f87171":isDue?"#fbbf24":"#475569"};border:1px solid ${isOver?"#ef444430":isDue?"#f59e0b30":"transparent"}">${isOver?"⚠ Overdue":isDue?"📅 Today":"📅 "+c.nextAction}</span>`:`<span style="margin-left:auto;font-size:.65rem;color:#334155">No date</span>`}
+          </div>
+        </div>`;
+      }).join("")}
+    </div>
+  </div>`;
+}
+
+// ── Detail Page ───────────────────────────────────────────────────────────────
+function buildDetail(){
+  const c=state.centers.find(x=>x.id===state.selectedId);
+  if(!c) return buildList();
+  const todayStr=today();
+  const isOver=c.nextAction&&c.nextAction<todayStr;
+  const isDue=c.nextAction===todayStr;
+  const e=state.editing;
+  return `<div style="max-width:700px;margin:0 auto;padding:1rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+      <button onclick="setState({page:'list',editing:null})" style="background:#1e293b;border:none;color:#94a3b8;padding:.4rem .8rem;border-radius:.6rem;cursor:pointer;font-size:.8rem">← Back</button>
+      ${e?btn("Save","handleSaveEdit()","background:#f59e0b;color:#0f172a"):btn("Edit","startEdit()","background:#1e293b;color:#94a3b8")}
+    </div>
+    <!-- Profile Card -->
+    <div style="background:#0f172a;border:1px solid #1e293b;border-radius:1rem;padding:1.25rem;margin-bottom:.75rem">
+      ${e?`
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+          <div style="grid-column:1/-1">${inp("e_name",e.name,"Name")}</div>
+          <div>${inp("e_contact",e.contact,"Contact")}</div>
+          <div>${inp("e_phone",e.phone,"Phone")}</div>
+          <div>${sel("e_country",e.country,COUNTRIES)}</div>
+          <div>${inp("e_city",e.city,"City")}</div>
+          <div>${inp("e_area",e.area,"Area")}</div>
+          <div>${sel("e_status",e.status,STATUS_OPTIONS)}</div>
+          <div>${sel("e_assigned",e.assignedTo,TEAM)}</div>
+          <div>${inp("e_website",e.website||"","Website")}</div>
+          <div style="grid-column:1/-1"><textarea id="e_notes" style="width:100%;background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius:.75rem;padding:.5rem .75rem;font-size:.8rem;box-sizing:border-box;outline:none;resize:none;height:4rem" oninput="handleInp(this)">${e.notes||""}</textarea></div>
+          <button onclick="setState({editing:null})" style="background:transparent;border:none;color:#64748b;cursor:pointer;font-size:.8rem;grid-column:1/-1">Cancel</button>
+        </div>`:`
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem">
+          <div>
+            <div style="display:flex;align-items:center;gap:.5rem"><span style="font-size:1.2rem">${FLAGS[c.country]||""}</span><h1 style="font-size:1.1rem;font-weight:700;color:white">${c.name}</h1></div>
+            <p style="color:#64748b;font-size:.8rem;margin-top:.2rem">${c.city}${c.area?", "+c.area:""} · ${c.country}</p>
+            ${c.website?`<a href="https://${c.website}" target="_blank" style="color:#f59e0b;font-size:.7rem">${c.website}</a>`:""}
+            <div style="margin-top:.5rem"><span style="background:rgba(245,158,11,.12);color:#fbbf24;padding:.2rem .6rem;border-radius:2rem;font-size:.7rem;font-weight:600">👤 ${c.assignedTo}</span></div>
+          </div>
+          <select onchange="handleStatus('${c.id}',this.value)" style="background:${STATUS_CFG[c.status].bg};border:1px solid ${STATUS_CFG[c.status].border};color:${STATUS_CFG[c.status].text};border-radius:2rem;padding:.3rem .7rem;font-size:.75rem;font-weight:600;outline:none;cursor:pointer">
+            ${STATUS_OPTIONS.map(s=>`<option value="${s}" ${c.status===s?"selected":""}>${STATUS_CFG[s].label}</option>`).join("")}
+          </select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.75rem">
+          <div style="background:#1e293b;border-radius:.6rem;padding:.6rem"><p style="font-size:.6rem;color:#475569">Contact</p><p style="font-size:.8rem;color:#e2e8f0;font-weight:500">${c.contact||"—"}</p></div>
+          <div style="background:#1e293b;border-radius:.6rem;padding:.6rem"><p style="font-size:.6rem;color:#475569">Phone</p>${c.phone?`<a href="tel:${c.phone}" style="font-size:.8rem;color:#f59e0b;font-weight:500">${c.phone}</a>`:`<p style="font-size:.8rem;color:#475569">—</p>`}</div>
+        </div>
+        ${c.notes?`<div style="background:#1e293b;border-radius:.6rem;padding:.75rem;margin-top:.5rem;font-size:.8rem;color:#94a3b8;line-height:1.5">${c.notes}</div>`:""}
+        <div style="display:flex;gap:.5rem;margin-top:.75rem;flex-wrap:wrap">
+          ${c.phone?`
+            <button onclick="openWA('${c.phone}','${(c.contact||c.name).replace(/'/g,"")}')" style="background:#16a34a;color:white;border:none;border-radius:.6rem;padding:.4rem .8rem;font-size:.75rem;font-weight:600;cursor:pointer">💬 WhatsApp</button>
+            <button onclick="window.open('tel:${c.phone}')" style="background:#047857;color:white;border:none;border-radius:.6rem;padding:.4rem .8rem;font-size:.75rem;font-weight:600;cursor:pointer">📞 Call</button>`:""}
+          <button onclick="setState({showAddAct:true,newAct:{...state.newAct,type:'Visit'}})" style="background:#6d28d9;color:white;border:none;border-radius:.6rem;padding:.4rem .8rem;font-size:.75rem;font-weight:600;cursor:pointer">🏪 Log Visit</button>
+        </div>`}
+    </div>
+    <!-- Follow-up -->
+    <div style="background:#0f172a;border:1px solid ${isOver?"#ef444440":isDue?"#f59e0b40":"#1e293b"};border-radius:1rem;padding:1.25rem;margin-bottom:.75rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:.75rem">
+        <div>
+          <p style="font-size:.65rem;color:#475569;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.4rem">Next Follow-up</p>
+          <p style="font-size:1.1rem;font-weight:700;color:${isOver?"#f87171":isDue?"#fbbf24":"white"}">${c.nextAction?fmt(c.nextAction):"Not set"}</p>
+          ${isOver?`<p style="color:#f87171;font-size:.7rem;margin-top:.2rem">⚠ Overdue</p>`:""}
+          ${isDue?`<p style="color:#fbbf24;font-size:.7rem;margin-top:.2rem">📅 Due today</p>`:""}
+        </div>
+        <input type="date" value="${c.nextAction||""}" onchange="handleNextAction('${c.id}',this.value)" style="background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius:.75rem;padding:.5rem .75rem;font-size:.8rem;outline:none;cursor:pointer"/>
+      </div>
+    </div>
+    <!-- Activity Log -->
+    <div style="background:#0f172a;border:1px solid #1e293b;border-radius:1rem;padding:1.25rem;margin-bottom:.75rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+        <p style="font-size:.65rem;color:#475569;text-transform:uppercase;letter-spacing:.08em">Activity Log (${(c.activities||[]).length})</p>
+        <button onclick="setState({showAddAct:!state.showAddAct})" style="background:#f59e0b;color:#0f172a;border:none;border-radius:2rem;padding:.3rem .75rem;font-size:.75rem;font-weight:700;cursor:pointer">+ Log</button>
+      </div>
+      ${state.showAddAct?`
+        <div style="background:#1e293b;border-radius:.75rem;padding:1rem;margin-bottom:.75rem;border:1px solid #334155">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;margin-bottom:.6rem">
+            ${ACT_TYPES.map(t=>`<button onclick="setState({newAct:{...state.newAct,type:'${t}'}})" style="padding:.5rem;border-radius:.6rem;border:none;cursor:pointer;font-size:.75rem;font-weight:600;background:${state.newAct.type===t?"#f59e0b":"#0f172a"};color:${state.newAct.type===t?"#0f172a":"#94a3b8"}">${{Visit:"🏪",Call:"📞",WhatsApp:"💬"}[t]} ${t}</button>`).join("")}
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
+            <div><label style="font-size:.65rem;color:#64748b">Date</label>${inp("na_date",state.newAct.date,"","date")}</div>
+            <div><label style="font-size:.65rem;color:#64748b">Duration (min)</label>${inp("na_dur",state.newAct.duration,"30","number")}</div>
+          </div>
+          ${state.newAct.type==="Visit"?`<div style="margin-bottom:.5rem"><label style="font-size:.65rem;color:#64748b">Outcome</label><select id="na_outcome" style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:.75rem;padding:.5rem .75rem;font-size:.8rem;outline:none" onchange="handleInp(this)"><option value="">Select outcome…</option>${OUTCOMES.map(o=>`<option value="${o}" ${state.newAct.outcome===o?"selected":""}>${o}</option>`).join("")}</select></div>`:""}
+          <div style="margin-bottom:.5rem"><label style="font-size:.65rem;color:#64748b">Notes</label><textarea id="na_note" placeholder="What happened?" style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:.75rem;padding:.5rem .75rem;font-size:.8rem;box-sizing:border-box;outline:none;resize:none;height:4rem" oninput="handleInp(this)">${state.newAct.note||""}</textarea></div>
+          <div style="margin-bottom:.75rem"><label style="font-size:.65rem;color:#64748b">Logged by</label><select id="na_by" style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:.75rem;padding:.5rem .75rem;font-size:.8rem;outline:none" onchange="handleInp(this)">${TEAM.filter(m=>m!=="Unassigned").map(m=>`<option value="${m}" ${state.newAct.by===m?"selected":""}>${m}</option>`).join("")}</select></div>
+          <div style="display:flex;gap:.5rem">
+            ${btn("Save Activity","handleAddAct()","background:#f59e0b;color:#0f172a")}
+            ${btn("Cancel","setState({showAddAct:false})","background:#0f172a;color:#64748b")}
+          </div>
+        </div>`:""}
+      ${(c.activities||[]).length===0&&!state.showAddAct?`<p style="color:#334155;font-size:.8rem;text-align:center;padding:1.5rem">No activity yet.</p>`:""}
+      <div>
+        ${(c.activities||[]).map(a=>`
+          <div style="display:flex;gap:.75rem;padding:.75rem 0;border-bottom:1px solid #1e293b">
+            <div style="width:2.2rem;height:2.2rem;border-radius:.6rem;background:${{Visit:"rgba(167,139,250,.1)",Call:"rgba(52,211,153,.1)",WhatsApp:"rgba(74,222,128,.1)"}[a.type]};display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">${{Visit:"🏪",Call:"📞",WhatsApp:"💬"}[a.type]}</div>
+            <div style="flex:1">
+              <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+                <span style="font-size:.7rem;font-weight:700;color:${{Visit:"#a78bfa",Call:"#34d399",WhatsApp:"#4ade80"}[a.type]};text-transform:uppercase">${a.type}</span>
+                <span style="font-size:.7rem;color:#475569">${fmt(a.date)}</span>
+                ${a.duration?`<span style="font-size:.7rem;color:#334155">${a.duration}min</span>`:""}
+                <span style="font-size:.7rem;color:#334155">· ${a.by}</span>
+                <button onclick="handleDelAct('${a.id}')" style="margin-left:auto;background:transparent;border:none;color:#334155;cursor:pointer;font-size:.7rem" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#334155'">remove</button>
+              </div>
+              ${a.outcome?`<p style="font-size:.7rem;color:#fbbf24;font-weight:600;margin-top:.2rem">→ ${a.outcome}</p>`:""}
+              <p style="font-size:.8rem;color:#94a3b8;margin-top:.2rem;line-height:1.4">${a.note}</p>
+            </div>
+          </div>`).join("")}
+      </div>
+    </div>
+    <button onclick="handleDelete('${c.id}')" style="background:transparent;border:none;color:#ef444460;cursor:pointer;font-size:.75rem;width:100%;text-align:center;padding:.75rem" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#ef444460'">Delete this business</button>
+  </div>`;
+}
+
+// ── Schedule Page ─────────────────────────────────────────────────────────────
+function buildSchedule(){
+  const ai=state.aiSchedule;
+  const todayStr=today();
+  const todayScheds=state.schedules.filter(s=>s.date===todayStr);
+  return `<div style="max-width:700px;margin:0 auto;padding:1rem">
+    <!-- AI Schedule Banner -->
+    ${ai?`
+      <div style="background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(16,185,129,.1));border:1px solid #f59e0b44;border-radius:1rem;padding:1.25rem;margin-bottom:.75rem">
+        ${sectionTitle("🤖 AI Agent — Today's Recommended Schedule")}
+        ${ai.salesTip?`<div style="background:rgba(245,158,11,.08);border-radius:.6rem;padding:.75rem;margin-bottom:.75rem;font-size:.8rem;color:#fbbf24;line-height:1.5">💡 <strong>Sales Tip:</strong> ${ai.salesTip}</div>`:""}
+        <div style="margin-bottom:.75rem">
+          ${(ai.stops||[]).map((s,i)=>`
+            <div style="display:flex;gap:.6rem;padding:.6rem 0;border-bottom:1px solid rgba(255,255,255,.05)">
+              <div style="background:rgba(245,158,11,.2);color:#fbbf24;width:1.8rem;height:1.8rem;border-radius:.5rem;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0">${i+1}</div>
+              <div style="flex:1">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <p style="font-size:.85rem;font-weight:700;color:white">${s.businessName}</p>
+                  <span style="font-size:.7rem;color:#fbbf24">${s.time}</span>
+                </div>
+                <p style="font-size:.7rem;color:#475569">${s.city}</p>
+                <p style="font-size:.7rem;color:#64748b;margin-top:.15rem">${s.reason}</p>
+              </div>
+              <span style="font-size:.65rem;padding:.2rem .5rem;border-radius:2rem;height:fit-content;flex-shrink:0;background:${s.priority==="High"?"rgba(239,68,68,.12)":s.priority==="Medium"?"rgba(245,158,11,.12)":"rgba(56,189,248,.12)"};color:${s.priority==="High"?"#f87171":s.priority==="Medium"?"#fbbf24":"#38bdf8"}">${s.priority}</span>
+            </div>`).join("")}
+        </div>
+        <button onclick="generateAISchedule(state.centers)" style="background:#f59e0b;color:#0f172a;border:none;border-radius:.6rem;padding:.5rem 1rem;font-size:.75rem;font-weight:700;cursor:pointer;margin-right:.5rem">🔄 Regenerate</button>
+        <button onclick="setState({aiSchedule:null})" style="background:#1e293b;color:#94a3b8;border:none;border-radius:.6rem;padding:.5rem 1rem;font-size:.75rem;font-weight:700;cursor:pointer">Dismiss</button>
+      </div>`:`
+      <div style="background:#0f172a;border:1px solid #1e293b;border-radius:1rem;padding:1rem;margin-bottom:.75rem;text-align:center">
+        <p style="color:#475569;font-size:.8rem;margin-bottom:.6rem">AI Agent auto-generates your schedule Mon–Fri at startup</p>
+        <button onclick="generateAISchedule(state.centers)" style="background:#f59e0b;color:#0f172a;border:none;border-radius:.6rem;padding:.5rem 1rem;font-size:.8rem;font-weight:700;cursor:pointer">🤖 Generate AI Schedule Now</button>
+      </div>`}
+    <!-- Manual Builder -->
+    <div style="background:#0f172a;border:1px solid #f59e0b33;border-radius:1rem;padding:1.25rem;margin-bottom:.75rem">
+      ${sectionTitle("🗺 Manual Route Builder")}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.75rem">
+        <div><label style="font-size:.65rem;color:#64748b">City</label>
+          <select onchange="setState({schedCity:this.value})" style="width:100%;background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius:.75rem;padding:.5rem .75rem;font-size:.8rem;outline:none">
+            ${Object.keys(CITY_COORDS).map(c=>`<option value="${c}" ${state.schedCity===c?"selected":""}>${c}</option>`).join("")}
+          </select>
+        </div>
+        <div><label style="font-size:.65rem;color:#64748b">Date</label>
+          <input type="date" value="${state.schedDate}" onchange="setState({schedDate:this.value})" style="width:100%;background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius:.75rem;padding:.5rem .75rem;font-size:.8rem;outline:none"/>
+        </div>
+      </div>
+      <button onclick="buildManualSchedule()" style="width:100%;background:#f59e0b;color:#0f172a;border:none;border-radius:.75rem;padding:.6rem;font-weight:700;font-size:.8rem;cursor:pointer;margin-bottom:.75rem">Suggest Nearby Stops →</button>
+      ${state.schedList.length>0?`
+        <p style="font-size:.65rem;color:#475569;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.5rem">${state.schedList.length} stops</p>
+        <div style="margin-bottom:.75rem">
+          ${state.schedList.map((s,i)=>`
+            <div style="display:flex;align-items:center;gap:.5rem;background:#1e293b;border-radius:.6rem;padding:.6rem;margin-bottom:.35rem">
+              <div style="display:flex;flex-direction:column;gap:.1rem">
+                <button onclick="moveStop(${i},-1)" ${i===0?"disabled":""} style="background:transparent;border:none;color:#334155;cursor:pointer;font-size:.7rem;line-height:1;padding:0">▲</button>
+                <button onclick="moveStop(${i},1)" ${i===state.schedList.length-1?"disabled":""} style="background:transparent;border:none;color:#334155;cursor:pointer;font-size:.7rem;line-height:1;padding:0">▼</button>
+              </div>
+              <div style="background:rgba(245,158,11,.2);color:#fbbf24;width:1.5rem;height:1.5rem;border-radius:.4rem;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;flex-shrink:0">${i+1}</div>
+              <div style="flex:1;min-width:0">
+                <p style="font-size:.8rem;font-weight:600;color:white;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</p>
+                <p style="font-size:.65rem;color:#475569">${s.area||""}, ${s.city}</p>
+              </div>
+              <input type="time" value="${s.scheduledTime}" onchange="updateStopTime(${i},this.value)" style="background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:.5rem;padding:.25rem .4rem;font-size:.7rem;width:5rem;outline:none"/>
+              <button onclick="removeStop(${i})" style="background:transparent;border:none;color:#334155;cursor:pointer;font-size:1.1rem;line-height:1" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#334155'">×</button>
+            </div>`).join("")}
+        </div>
+        <button onclick="saveSchedule()" style="width:100%;background:#10b981;color:white;border:none;border-radius:.75rem;padding:.6rem;font-weight:700;font-size:.8rem;cursor:pointer">Save Schedule to Cloud ✓</button>`:""}
+    </div>
+    <!-- Today's schedules -->
+    ${todayScheds.length>0?`
+      <div style="background:#0f172a;border:1px solid #1e293b;border-radius:1rem;padding:1.25rem">
+        ${sectionTitle("📅 Today's Saved Schedules")}
+        ${todayScheds.map(sched=>`
+          <p style="font-size:.8rem;font-weight:600;color:white;margin-bottom:.5rem">${sched.city} — ${sched.stops.filter(s=>s.done).length}/${sched.stops.length} done</p>
+          ${sched.stops.map((stop,i)=>`
+            <div style="display:flex;align-items:center;gap:.6rem;padding:.5rem;border-radius:.6rem;background:${stop.done?"rgba(16,185,129,.06)":"#1e293b"};border:1px solid ${stop.done?"#10b98130":"#334155"};margin-bottom:.35rem">
+              <div style="width:1.5rem;height:1.5rem;border-radius:50%;background:${stop.done?"#10b981":"#334155"};color:${stop.done?"white":"#64748b"};display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;flex-shrink:0">${stop.done?"✓":i+1}</div>
+              <div style="flex:1">
+                <p style="font-size:.8rem;font-weight:600;color:${stop.done?"#64748b":"white"};${stop.done?"text-decoration:line-through":""}">${stop.name}</p>
+                <p style="font-size:.65rem;color:#475569">${stop.scheduledTime} · ${stop.area||stop.city}</p>
+                ${stop.outcome?`<p style="font-size:.65rem;color:#10b981;font-weight:600">→ ${stop.outcome}</p>`:""}
+              </div>
+              ${!stop.done?`<select onchange="markStopDone('${sched.id}',${i},this.value)" style="background:#0f172a;border:1px solid #334155;color:#94a3b8;border-radius:.5rem;padding:.25rem .4rem;font-size:.65rem;outline:none;cursor:pointer"><option value="">Mark done</option>${OUTCOMES.map(o=>`<option value="${o}">${o}</option>`).join("")}</select>`:""}
+            </div>`).join("")}`).join("")}
+      </div>`:""}
+  </div>`;
+}
+
+// ── Finder Page ───────────────────────────────────────────────────────────────
+function buildFinder(){
+  return `<div style="max-width:700px;margin:0 auto;padding:1rem">
+    <div style="background:#0f172a;border:1px solid #f59e0b33;border-radius:1rem;padding:1.25rem;margin-bottom:.75rem">
+      ${sectionTitle("🔍 AI Business Finder — PPF & Tint Centers")}
+      <p style="font-size:.75rem;color:#475569;margin-bottom:.75rem;line-height:1.5">Search for PPF, window tint, and auto detailing businesses anywhere. AI will scan the web and add them directly to your CRM.</p>
+      <input id="finder_q" value="${state.finderQuery}" placeholder="e.g. PPF detailing centers Riyadh Saudi Arabia" style="width:100%;background:#1e293b;border:1px solid #334155;color:#e2e8f0;border-radius:.75rem;padding:.6rem .75rem;font-size:.85rem;box-sizing:border-box;outline:none;margin-bottom:.6rem" oninput="setState({finderQuery:this.value})" onkeydown="if(event.key==='Enter')runFinder()"/>
+      <button onclick="runFinder()" style="width:100%;background:${state.finderLoading?"#334155":"#f59e0b"};color:${state.finderLoading?"#64748b":"#0f172a"};border:none;border-radius:.75rem;padding:.6rem;font-weight:700;font-size:.85rem;cursor:pointer" ${state.finderLoading?"disabled":""}>
+        ${state.finderLoading?"🤖 Searching the web…":"🔍 Search & Find Businesses"}
+      </button>
+      <div style="display:flex;gap:.35rem;flex-wrap:wrap;margin-top:.6rem">
+        ${["PPF centers Dubai","Window tint Riyadh","Auto detailing Doha","PPF Kuwait City","Ceramic coating Muscat","PPF Baghdad"].map(q=>`<button onclick="setState({finderQuery:'${q}'},()=>runFinder())" style="background:#1e293b;border:none;color:#64748b;padding:.25rem .6rem;border-radius:2rem;font-size:.65rem;cursor:pointer" onmouseover="this.style.color='white'" onmouseout="this.style.color='#64748b'">${q}</button>`).join("")}
+      </div>
+    </div>
+    ${state.finderResults.length>0?`
+      <p style="font-size:.7rem;color:#475569;text-transform:uppercase;letter-spacing:.08em;margin-bottom:.5rem">${state.finderResults.length} businesses found</p>
+      ${state.finderResults.map((b,i)=>`
+        <div style="background:#0f172a;border:1px solid #1e293b;border-radius:1rem;padding:1rem;margin-bottom:.5rem">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem">
+            <div style="flex:1">
+              <p style="font-size:.9rem;font-weight:700;color:white">${b.name}</p>
+              <p style="font-size:.75rem;color:#475569;margin-top:.15rem">${b.city||""} · ${b.country||""}</p>
+              ${b.phone?`<p style="font-size:.75rem;color:#fbbf24;margin-top:.15rem">📞 ${b.phone}</p>`:""}
+              ${b.website?`<p style="font-size:.7rem;color:#f59e0b;margin-top:.1rem">🌐 ${b.website}</p>`:""}
+              ${b.notes?`<p style="font-size:.75rem;color:#64748b;margin-top:.25rem;line-height:1.4">${b.notes}</p>`:""}
+            </div>
+            <button onclick="addFoundBusiness(state.finderResults[${i}])" style="background:#10b981;color:white;border:none;border-radius:.6rem;padding:.4rem .75rem;font-size:.75rem;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap">+ Add to CRM</button>
+          </div>
+        </div>`).join("")}`:""}
+    ${!state.finderLoading&&state.finderResults.length===0?`
+      <div style="text-align:center;padding:2rem;color:#334155">
+        <p style="font-size:2rem;margin-bottom:.5rem">🌐</p>
+        <p style="font-size:.8rem">Enter a search query to find businesses</p>
+      </div>`:""}
+  </div>`;
+}
+
+// ── Chat / AI Agent Page ──────────────────────────────────────────────────────
+function buildChat(){
+  return `<div style="max-width:700px;margin:0 auto;padding:1rem;display:flex;flex-direction:column;height:calc(100vh - 120px)">
+    <div style="background:#0f172a;border:1px solid #f59e0b33;border-radius:1rem;padding:1rem;margin-bottom:.75rem">
+      <p style="font-size:.65rem;color:#f59e0b;text-transform:uppercase;letter-spacing:.08em;font-weight:700">🤖 AI Sales Agent</p>
+      <p style="font-size:.75rem;color:#475569;margin-top:.2rem">Ask me anything about your pipeline, schedule, sales strategy, or follow-ups.</p>
+    </div>
+    <div id="chat_messages" style="flex:1;overflow-y:auto;margin-bottom:.75rem;display:flex;flex-direction:column;gap:.6rem;min-height:200px;max-height:55vh">
+      ${state.chatMessages.length===0?`
+        <div style="text-align:center;padding:2rem;color:#334155">
+          <p style="font-size:1.5rem;margin-bottom:.5rem">🤖</p>
+          <p style="font-size:.8rem">Ask me about your leads, schedule, or strategy</p>
+          <div style="display:flex;flex-direction:column;gap:.35rem;margin-top:.75rem">
+            ${["Who should I visit today?","Which leads are most likely to convert?","Give me a script to pitch Union Delta PPF","Which city has the most untouched cold leads?"].map(q=>`<button onclick="setState({chatInput:'${q}'})" style="background:#1e293b;border:none;color:#64748b;padding:.4rem .75rem;border-radius:.6rem;font-size:.75rem;cursor:pointer;text-align:left" onmouseover="this.style.color='white'" onmouseout="this.style.color='#64748b'">${q}</button>`).join("")}
+          </div>
+        </div>`:""}
+      ${state.chatMessages.map(m=>`
+        <div style="display:flex;${m.role==="user"?"justify-content:flex-end":"justify-content:flex-start"}">
+          <div style="max-width:85%;padding:.6rem .9rem;border-radius:${m.role==="user"?"1rem 1rem .2rem 1rem":"1rem 1rem 1rem .2rem"};font-size:.8rem;line-height:1.5;${m.role==="user"?"background:#f59e0b;color:#0f172a;font-weight:500":"background:#1e293b;color:#e2e8f0;border:1px solid #334155"}">${m.content.replace(/\n/g,"<br>")}</div>
+        </div>`).join("")}
+      ${state.chatLoading?`<div style="display:flex;justify-content:flex-start"><div style="background:#1e293b;border:1px solid #334155;padding:.6rem .9rem;border-radius:1rem 1rem 1rem .2rem;font-size:.8rem;color:#475569">🤖 Thinking…</div></div>`:""}
+    </div>
+    <div style="display:flex;gap:.5rem">
+      <input id="chat_inp" value="${state.chatInput.replace(/"/g,"&quot;")}" placeholder="Ask your AI sales agent…" style="flex:1;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:.75rem;padding:.6rem .9rem;font-size:.85rem;outline:none" oninput="setState({chatInput:this.value})" onkeydown="if(event.key==='Enter')sendChat()"/>
+      <button onclick="sendChat()" style="background:#f59e0b;color:#0f172a;border:none;border-radius:.75rem;padding:.6rem 1rem;font-weight:700;font-size:.85rem;cursor:pointer">${state.chatLoading?"…":"Send"}</button>
+    </div>
+  </div>`;
+}
+
+// ── Report Page ───────────────────────────────────────────────────────────────
+function buildReport(){
+  const todayStr=today();
+  const allActs=state.centers.flatMap(c=>c.activities||[]);
+  const todayActs=allActs.filter(a=>a.date===todayStr);
+  const d=new Date(); d.setDate(d.getDate()-d.getDay()+1);
+  const ws=d.toISOString().slice(0,10);
+  const we=new Date(d.getTime()+6*86400000).toISOString().slice(0,10);
+  const weekActs=allActs.filter(a=>a.date>=ws&&a.date<=we);
+  const weekVisits=weekActs.filter(a=>a.type==="Visit");
+  const pct=Math.min(100,Math.round(weekVisits.length/state.weekTarget*100));
+  const outcomes=OUTCOMES.map(o=>({name:o,count:allActs.filter(a=>a.type==="Visit"&&a.outcome===o).length})).filter(o=>o.count>0);
+  const teamStats=TEAM.filter(m=>m!=="Unassigned").map(m=>({name:m,v:allActs.filter(a=>a.by===m&&a.type==="Visit").length,c:allActs.filter(a=>a.by===m&&a.type==="Call").length}));
+  return `<div style="max-width:700px;margin:0 auto;padding:1rem">
+    <!-- Weekly target -->
+    <div style="background:#0f172a;border:1px solid #1e293b;border-radius:1rem;padding:1.25rem;margin-bottom:.75rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+        ${sectionTitle("Weekly Visit Target")}
+        <div style="display:flex;align-items:center;gap:.4rem">
+          <button onclick="setState({weekTarget:Math.max(1,state.weekTarget-5)})" style="background:#1e293b;border:none;color:#94a3b8;width:1.75rem;height:1.75rem;border-radius:.4rem;cursor:pointer;font-weight:700">-</button>
+          <span style="color:white;font-weight:700;width:2rem;text-align:center">${state.weekTarget}</span>
+          <button onclick="setState({weekTarget:state.weekTarget+5})" style="background:#1e293b;border:none;color:#94a3b8;width:1.75rem;height:1.75rem;border-radius:.4rem;cursor:pointer;font-weight:700">+</button>
+        </div>
+      </div>
+      <p style="font-size:2.5rem;font-weight:700;color:${pct>=100?"#10b981":pct>=60?"#fbbf24":"#f87171"}">${weekVisits.length} <span style="font-size:1rem;color:#475569">/ ${state.weekTarget} visits</span></p>
+      <div style="background:#1e293b;border-radius:2rem;height:.5rem;margin:.5rem 0">
+        <div style="height:.5rem;border-radius:2rem;background:${pct>=100?"#10b981":pct>=60?"#f59e0b":"#ef4444"};width:${pct}%;transition:width .5s"></div>
+      </div>
+      <p style="font-size:.65rem;color:#334155">${ws} → ${we}</p>
+    </div>
+    <!-- Today -->
+    <div style="background:#0f172a;border:1px solid #1e293b;border-radius:1rem;padding:1.25rem;margin-bottom:.75rem">
+      ${sectionTitle("Today's Activity")}
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem">
+        ${[["🏪 Visits",todayActs.filter(a=>a.type==="Visit").length,"#a78bfa"],["📞 Calls",todayActs.filter(a=>a.type==="Call").length,"#34d399"],["💬 WhatsApp",todayActs.filter(a=>a.type==="WhatsApp").length,"#4ade80"]].map(([l,v,c])=>`
+          <div style="background:${c}1a;border-radius:.6rem;padding:.75rem;text-align:center">
+            <p style="font-size:1.5rem;font-weight:700;color:${c}">${v}</p>
+            <p style="font-size:.65rem;color:#475569;margin-top:.15rem">${l}</p>
+          </div>`).join("")}
+      </div>
+    </div>
+    <!-- Team -->
+    ${teamStats.some(m=>m.v+m.c>0)?`
+      <div style="background:#0f172a;border:1px solid #1e293b;border-radius:1rem;padding:1.25rem;margin-bottom:.75rem">
+        ${sectionTitle("Team Performance (All Time)")}
+        ${teamStats.filter(m=>m.v+m.c>0).map(m=>`
+          <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.6rem">
+            <div style="width:2rem;height:2rem;border-radius:50%;background:rgba(245,158,11,.2);color:#fbbf24;font-weight:700;font-size:.75rem;display:flex;align-items:center;justify-content:center;flex-shrink:0">${m.name[0]}</div>
+            <div style="flex:1">
+              <div style="display:flex;justify-content:space-between;margin-bottom:.25rem">
+                <span style="font-size:.8rem;color:#e2e8f0;font-weight:500">${m.name}</span>
+                <span style="font-size:.7rem;color:#475569">🏪 ${m.v} · 📞 ${m.c}</span>
+              </div>
+              <div style="background:#1e293b;border-radius:2rem;height:.35rem">
+                <div style="height:.35rem;border-radius:2rem;background:#f59e0b;width:${Math.min(100,(m.v+m.c)/Math.max(1,...teamStats.map(x=>x.v+x.c))*100)}%"></div>
+              </div>
+            </div>
+          </div>`).join("")}
+      </div>`:""}
+    <!-- Outcomes -->
+    ${outcomes.length>0?`
+      <div style="background:#0f172a;border:1px solid #1e293b;border-radius:1rem;padding:1.25rem">
+        ${sectionTitle("Visit Outcomes (All Time)")}
+        ${outcomes.sort((a,b)=>b.count-a.count).map(o=>`
+          <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem">
+            <span style="font-size:.8rem;color:#94a3b8;flex:1">${o.name}</span>
+            <span style="font-size:.8rem;font-weight:700;color:white;width:1.5rem;text-align:right">${o.count}</span>
+            <div style="background:#1e293b;border-radius:2rem;height:.35rem;width:6rem">
+              <div style="height:.35rem;border-radius:2rem;background:#f59e0b;width:${o.count/outcomes[0].count*100}%"></div>
+            </div>
+          </div>`).join("")}
+      </div>`:""}
+  </div>`;
+}
+
+// ── Event Handlers ────────────────────────────────────────────────────────────
+function attachEvents(){
+  // expose globals
+  window.setState = (patch, cb) => { state={...state,...patch}; render(); if(cb) cb(); };
+  window.setPage = (p, id) => setState({page:p, selectedId:id||state.selectedId});
+  window.setFilter = (type,val) => {
+    if(type==="country") setState({filterCountry:state.filterCountry===val?"All":val});
+    if(type==="status") setState({filterStatus:val});
+    if(type==="assigned") setState({filterAssigned:val});
+  };
+  window.handleInp = (el) => {
+    const id=el.id, v=el.value;
+    const ncMap={nc_name:"name",nc_contact:"contact",nc_phone:"phone",nc_country:"country",nc_city:"city",nc_area:"area",nc_status:"status",nc_assigned:"assignedTo",nc_next:"nextAction",nc_notes:"notes"};
+    const naMap={na_date:"date",na_dur:"duration",na_outcome:"outcome",na_note:"note",na_by:"by"};
+    const eMap={e_name:"name",e_contact:"contact",e_phone:"phone",e_country:"country",e_city:"city",e_area:"area",e_status:"status",e_assigned:"assignedTo",e_website:"website",e_notes:"notes"};
+    if(ncMap[id]) state={...state,newCenter:{...state.newCenter,[ncMap[id]]:v}};
+    else if(naMap[id]) state={...state,newAct:{...state.newAct,[naMap[id]]:v}};
+    else if(eMap[id]) state={...state,editing:{...state.editing,[eMap[id]]:v}};
+    else if(id==="search_inp") state={...state,search:v};
+    else if(id==="finder_q") state={...state,finderQuery:v};
+    else if(id==="chat_inp") state={...state,chatInput:v};
+  };
+  window.startEdit = () => {
+    const c=state.centers.find(x=>x.id===state.selectedId);
+    if(c) setState({editing:{name:c.name,contact:c.contact,phone:c.phone,country:c.country,city:c.city,area:c.area,status:c.status,nextAction:c.nextAction,notes:c.notes,website:c.website||"",assignedTo:c.assignedTo}});
+  };
+  window.handleAdd=handleAdd; window.handleSaveEdit=handleSaveEdit;
+  window.handleAddAct=handleAddAct; window.handleDelAct=handleDelAct;
+  window.handleStatus=handleStatus; window.handleNextAction=handleNextAction;
+  window.handleDelete=handleDelete; window.openWA=openWA;
+  window.generateAISchedule=generateAISchedule; window.buildManualSchedule=buildManualSchedule;
+  window.saveSchedule=saveSchedule; window.markStopDone=markStopDone;
+  window.runFinder=runFinder; window.addFoundBusiness=addFoundBusiness;
+  window.sendChat=sendChat;
+  window.moveStop=(i,dir)=>{
+    const n=[...state.schedList]; const s=i+dir;
+    if(s<0||s>=n.length)return;
+    [n[i],n[s]]=[n[s],n[i]]; setState({schedList:n});
+  };
+  window.removeStop=(i)=>setState({schedList:state.schedList.filter((_,j)=>j!==i)});
+  window.updateStopTime=(i,t)=>setState({schedList:state.schedList.map((s,j)=>j===i?{...s,scheduledTime:t}:s)});
+  window.markStopDone=(schedId,idx,outcome)=>{
+    const updated=state.schedules.map(s=>s.id!==schedId?s:{...s,stops:s.stops.map((st,i)=>i===idx?{...st,done:true,outcome}:st)});
+    fbSetSchedule(updated.find(s=>s.id===schedId));
+    setState({schedules:updated});
+  };
+  // Auto-scroll chat
+  const chatEl=document.getElementById("chat_messages");
+  if(chatEl) chatEl.scrollTop=chatEl.scrollHeight;
+}
+
+// Start
+boot();
+</script>
+</head>
+<body style="margin:0;padding:0">
+  <div id="root"></div>
+</body>
+</html>
